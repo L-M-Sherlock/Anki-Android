@@ -76,6 +76,15 @@
                 android:key="providerEnabled"
                 android:summary="@string/enable_api_summary"
                 android:title="@string/enable_api_title"/>
+            <Preference
+                android:key="thirdpartyapps_link"
+                android:summary="@string/thirdparty_apps_summary"
+                android:title="@string/thirdparty_apps_title">
+                <intent
+                    android:action="android.intent.action.VIEW"
+                    android:data="https://github.com/ankidroid/Anki-Android/wiki/Third-Party-Apps"
+                    />
+            </Preference>
             <CheckBoxPreference
                 android:defaultValue="false"
                 android:key="tts"
@@ -86,7 +95,6 @@
                 android:entries="@array/dictionary_labels"
                 android:entryValues="@array/dictionary_values"
                 android:key="dictionary"
-                android:summary="@string/preference_summary_literal"
                 android:title="@string/dictionary" />
             <com.ichi2.preferences.CustomDialogPreference
                 android:dialogIcon="@drawable/ic_dialog_alert"
@@ -124,6 +132,10 @@
         </PreferenceCategory>
 
 
+    <CheckBoxPreference
+        android:key="schedVer"
+        android:title="@string/sched_ver"
+        android:summary="@string/sched_ver_summ" />
     <Preference
         android:key="about_dialog_preference"
         android:title="@string/about_title">

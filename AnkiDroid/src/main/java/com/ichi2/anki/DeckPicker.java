@@ -257,9 +257,15 @@ public class DeckPicker extends NavigationDrawerActivity implements
             if (mProgressDialog != null && mProgressDialog.isShowing()) {
                 mProgressDialog.dismiss();
             }
-            AnkiPackageImporter imp = (AnkiPackageImporter) result.getObjArray()[0];
-            showSimpleMessageDialog(TextUtils.join("\n", imp.getLog()));
-            updateDeckList();
+            // If boolean and string are both set, we are signalling an error message
+            // instead of a successful result.
+            if (result.getBoolean() && result.getString() != null) {
+                showSimpleMessageDialog(result.getString());
+            } else {
+                AnkiPackageImporter imp = (AnkiPackageImporter) result.getObjArray()[0];
+                showSimpleMessageDialog(TextUtils.join("\n", imp.getLog()));
+                updateDeckList();
+            }
         }
 
 
@@ -329,11 +335,18 @@ public class DeckPicker extends NavigationDrawerActivity implements
             if (mProgressDialog != null && mProgressDialog.isShowing()) {
                 mProgressDialog.dismiss();
             }
-            String exportPath = result.getString();
-            if (exportPath != null) {
-                showAsyncDialogFragment(DeckPickerExportCompleteDialog.newInstance(exportPath));
+
+            // If boolean and string are both set, we are signalling an error message
+            // instead of a successful result.
+            if (result.getBoolean() && result.getString() != null) {
+                showSimpleMessageDialog(result.getString());
             } else {
-                UIUtils.showThemedToast(DeckPicker.this, getResources().getString(R.string.export_unsuccessful), true);
+                String exportPath = result.getString();
+                if (exportPath != null) {
+                    showAsyncDialogFragment(DeckPickerExportCompleteDialog.newInstance(exportPath));
+                } else {
+                    UIUtils.showThemedToast(DeckPicker.this, getResources().getString(R.string.export_unsuccessful), true);
+                }
             }
         }
     };
@@ -976,8 +989,15 @@ public class DeckPicker extends NavigationDrawerActivity implements
                 return;
             }
 
+            // Skip full DB check if the basic check is OK
+            //TODO: remove this variable if we really want to do the full db check on every user
+            boolean skipDbCheck = false;
+            if (previous < upgradeDbVersion && getCol().basicCheck()) {
+                skipDbCheck = true;
+            }
+
             //noinspection ConstantConditions
-            if (previous < upgradeDbVersion || previous < upgradePrefsVersion) {
+            if ((!skipDbCheck && previous < upgradeDbVersion) || previous < upgradePrefsVersion) {
                 if (previous < upgradePrefsVersion) {
                     Timber.i("showStartupScreensAndDialogs() running upgradePreferences()");
                     CompatHelper.removeHiddenPreferences(this.getApplicationContext());
@@ -985,7 +1005,7 @@ public class DeckPicker extends NavigationDrawerActivity implements
                 }
                 // Integrity check loads asynchronously and then restart deck picker when finished
                 //noinspection ConstantConditions
-                if (previous < upgradeDbVersion) {
+                if (!skipDbCheck && previous < upgradeDbVersion) {
                     Timber.i("showStartupScreensAndDialogs() running integrityCheck()");
                     integrityCheck();
                 } else if (previous < upgradePrefsVersion) {

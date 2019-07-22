@@ -45,6 +45,7 @@
     <string name="preview_title">Preview</string>
     <string name="reposition_card_dialog_title">Reposition new card</string>
     <string name="reposition_card_dialog_message">Start position:</string>
+    <string name="reposition_card_not_new_error">Only new cards can be repositioned</string>
 
     <plurals name="reposition_card_dialog_acknowledge">
         <item quantity="one">%d card repositioned</item>
@@ -57,7 +58,7 @@
         <item quantity="other">%d cards reset</item>
     </plurals>
     <string name="reschedule_card_dialog_title">Reschedule card</string>
-    <string name="reschedule_card_dialog_message">Reschedule for review in x days:</string>
+    <string name="reschedule_card_dialog_message">Reschedule for review in x days</string>
     <plurals name="reschedule_cards_dialog_acknowledge">
         <item quantity="one">%d card rescheduled</item>
         <item quantity="other">%d cards rescheduled</item>

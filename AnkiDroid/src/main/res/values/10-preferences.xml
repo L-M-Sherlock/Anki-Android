@@ -140,6 +140,11 @@
     <string name="time_limit_summ">XXX min</string>
     <string name="day_offset">Start of next day</string>
     <string name="day_offset_summ">XXX hours past midnight</string>
+    <string name="sched_ver">Experimental V2 scheduler</string>
+    <string name="sched_ver_summ">Enable the experimental scheduler. Forces changes in one direction on next sync</string>
+    <string name="sched_ver_toggle_title">Confirm</string>
+    <string name="sched_ver_2to1">This will reset any cards in learning, clear filtered decks, and change the scheduler version. Proceed?</string>
+    <string name="sched_ver_1to2">The experimental scheduler could cause incorrect scheduling. Please ensure you have read the documentation first. Proceed?</string>
     <string name="pref_keep_screen_on">Keep screen on</string>
     <string name="pref_keep_screen_on_summ">Disable screen timeout</string>
     <string name="convert_fen_text">Chess notation support</string>
@@ -152,6 +157,8 @@
     <string name="custom_buttons_setting_if_room">Show if room</string>
     <string name="custom_buttons_setting_menu_only">Menu only</string>
     <string name="reset_custom_buttons">Reset to default</string>
+    <string name="thirdparty_apps_title">Third-party API apps</string>
+    <string name="thirdparty_apps_summary">See a list of applications which make use of the AnkiDroid API such as dictionaries, utilities.</string>
 
     <string name="html_javascript_debugging">HTML / Javascript Debugging</string>
     <string name="html_javascript_debugging_summ">Enable remote WebView connections, and save card HTML to AnkiDroid directory</string>

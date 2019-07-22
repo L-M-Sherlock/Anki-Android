@@ -22,6 +22,7 @@
 package com.ichi2.anki;
 
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -59,6 +60,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -123,10 +125,10 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
     public static final int DECK_OPTIONS = 1;
 
     /** Constant for class attribute signaling answer */
-    public static final String ANSWER_CLASS = "answer";
+    public static final String ANSWER_CLASS = "\"answer\"";
 
     /** Constant for class attribute signaling question */
-    public static final String QUESTION_CLASS = "question";
+    public static final String QUESTION_CLASS = "\"question\"";
 
     /** Max size of the font for dynamic calculation of font size */
     private static final int DYNAMIC_FONT_MAX_SIZE = 14;
@@ -694,11 +696,14 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         StringBuilder sb = new StringBuilder();
         sb.append("<div");
         sb.append("><code id=typeans>");
+
+        // We have to use Matcher.quoteReplacement because the inputs here might have $ or \.
+
         if (!TextUtils.isEmpty(userAnswer)) {
             // The user did type something.
             if (userAnswer.equals(correctAnswer)) {
                 // and it was right.
-                sb.append(DiffEngine.wrapGood(correctAnswer));
+                sb.append(Matcher.quoteReplacement(DiffEngine.wrapGood(correctAnswer)));
                 sb.append("\u2714"); // Heavy check mark
             } else {
                 // Answer not correct.
@@ -706,15 +711,15 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                 // exactly the same as the correct text.
                 String[] diffedStrings = diffEngine.diffedHtmlStrings(correctAnswer, userAnswer);
                 // We know we get back two strings.
-                sb.append(diffedStrings[0]);
+                sb.append(Matcher.quoteReplacement(diffedStrings[0]));
                 sb.append("<br>&darr;<br>");
-                sb.append(diffedStrings[1]);
+                sb.append(Matcher.quoteReplacement(diffedStrings[1]));
             }
         } else {
             if (!mUseInputTag) {
-                sb.append(DiffEngine.wrapMissing(correctAnswer));
+                sb.append(Matcher.quoteReplacement(DiffEngine.wrapMissing(correctAnswer)));
             } else {
-                sb.append(correctAnswer);
+                sb.append(Matcher.quoteReplacement(correctAnswer));
             }
         }
         sb.append("</code></div>");
@@ -1414,11 +1419,22 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         Timber.d("Focusable = %s, Focusable in touch mode = %s", webView.isFocusable(), webView.isFocusableInTouchMode());
 
         webView.setWebViewClient(new WebViewClient() {
-            // Filter any links using the custom "playsound" protocol defined in Sound.java.
-            // We play sounds through these links when a user taps the sound icon.
+            @Override
+            @TargetApi(Build.VERSION_CODES.N)
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                return filterUrl(url);
+            }
+
             @Override
             @SuppressWarnings("deprecation") // tracked as #5017 in github
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return filterUrl(url);
+            }
+
+            // Filter any links using the custom "playsound" protocol defined in Sound.java.
+            // We play sounds through these links when a user taps the sound icon.
+            private boolean filterUrl(String url) {
                 if (url.startsWith("playsound:")) {
                     // Send a message that will be handled on the UI thread.
                     Message msg = Message.obtain();
@@ -1432,18 +1448,14 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                 }
                 if (url.startsWith("typeblurtext:")) {
                     // Store the text the javascript has send us…
-                    mTypeInput = URLDecoder.decode(url.replaceFirst("typeblurtext:", ""));
+                    mTypeInput = decodeUrl(url.replaceFirst("typeblurtext:", ""));
                     // … and show the “SHOW ANSWER” button again.
                     mFlipCardLayout.setVisibility(View.VISIBLE);
                     return true;
                 }
                 if (url.startsWith("typeentertext:")) {
                     // Store the text the javascript has send us…
-                    try {
-                        mTypeInput = URLDecoder.decode(url.replaceFirst("typeentertext:", ""), "UTF-8");
-                    } catch (UnsupportedEncodingException e) {
-                        Timber.e(e, "UTF-8 isn't supported as an encoding?");
-                    }
+                    mTypeInput = decodeUrl(url.replaceFirst("typeentertext:", ""));
                     // … and show the answer.
                     mFlipCardLayout.performClick();
                     return true;
@@ -1503,6 +1515,14 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                 return true;
             }
 
+            private String decodeUrl(String url) {
+                try {
+                    return URLDecoder.decode(url, "UTF-8");
+                } catch (UnsupportedEncodingException e) {
+                    Timber.e(e, "UTF-8 isn't supported as an encoding?");
+                }
+                return "";
+            }
 
             // Run any post-load events in javascript that rely on the window being completely loaded.
             @Override
@@ -2107,7 +2127,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         content = content.replace("font-weight:600;", "font-weight:700;");
 
         // CSS class for card-specific styling
-        String cardClass = "card card" + (mCurrentCard.getOrd() + 1);
+        String cardClass = "mathjax-hasnt-rendered-yet card card" + (mCurrentCard.getOrd() + 1);
 
         if (mPrefCenterVertically) {
             cardClass += " vertically_centered";
@@ -2132,10 +2152,21 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         if (mNightMode) {
             // Enable the night-mode class
             cardClass += " night_mode";
+
+            // Emit the dark_mode selector to allow dark theme overrides
+            if (Themes.getCurrentTheme(this) == Themes.THEME_NIGHT_DARK) {
+                cardClass += " ankidroid_dark_mode";
+            }
+
             // If card styling doesn't contain any mention of the night_mode class then do color inversion as fallback
             // TODO: find more robust solution that won't match unrelated classes like "night_mode_old"
             if (!mCurrentCard.css().contains(".night_mode")) {
                 content = HtmlColors.invertColors(content);
+            }
+        } else {
+            // Emit the plain_mode selector to allow plain theme overrides
+            if (Themes.getCurrentTheme(this) == Themes.THEME_DAY_PLAIN) {
+                cardClass += " ankidroid_plain_mode";
             }
         }
 
@@ -2318,13 +2349,13 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
      */
     private static String enrichWithQADiv(String content, boolean isAnswer) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<div class=\"");
+        sb.append("<div class=");
         if (isAnswer) {
             sb.append(ANSWER_CLASS);
         } else {
             sb.append(QUESTION_CLASS);
         }
-        sb.append("\">");
+        sb.append(" id=\"qa\">");
         sb.append(content);
         sb.append("</div>");
         return sb.toString();

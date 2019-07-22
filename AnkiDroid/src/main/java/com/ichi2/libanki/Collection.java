@@ -28,6 +28,7 @@ import com.ichi2.anki.AnkiDroidApp;
 import com.ichi2.anki.CardUtils;
 import com.ichi2.anki.R;
 import com.ichi2.anki.UIUtils;
+import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.anki.exception.ConfirmModSchemaException;
 import com.ichi2.async.DeckTask;
 import com.ichi2.compat.CompatHelper;
@@ -55,6 +56,7 @@ import java.util.Random;
 import java.util.regex.Pattern;
 
 import androidx.sqlite.db.SupportSQLiteDatabase;
+import androidx.sqlite.db.SupportSQLiteStatement;
 import timber.log.Timber;
 
 // Anki maintains a cache of used tags so it can quickly present a list of tags
@@ -102,6 +104,9 @@ public class Collection {
     private static final Pattern fClozePatternQ = Pattern.compile("\\{\\{(?!type:)(.*?)cloze:");
     private static final Pattern fClozePatternA = Pattern.compile("\\{\\{(.*?)cloze:");
     private static final Pattern fClozeTagStart = Pattern.compile("<%cloze:");
+
+    private static final int fDefaultSchedulerVersion = 1;
+    private static final List<Integer> fSupportedSchedulerVersions = Arrays.asList(1, 2);
 
     // other options
     public static final String defaultConf = "{"
@@ -166,7 +171,7 @@ public class Collection {
         }
         mStartReps = 0;
         mStartTime = 0;
-        mSched = new Sched(this);
+        _loadScheduler();
         if (!mConf.optBoolean("newBury", false)) {
             try {
                 mConf.put("newBury", true);
@@ -182,6 +187,54 @@ public class Collection {
         String n = (new File(mPath)).getName().replace(".anki2", "");
         // TODO:
         return n;
+    }
+
+
+    /**
+     * Scheduler
+     * ***********************************************************
+     */
+
+
+    public int schedVer() {
+        int ver = mConf.optInt("schedVer", fDefaultSchedulerVersion);
+        if (fSupportedSchedulerVersions.contains(ver)) {
+            return ver;
+        } else {
+            throw new RuntimeException("Unsupported scheduler version");
+        }
+    }
+
+    private void _loadScheduler() {
+        int ver = schedVer();
+        if (ver == 1) {
+            mSched = new Sched(this);
+        } else if (ver == 2) {
+            mSched = new SchedV2(this);
+        }
+    }
+
+    public void changeSchedulerVer(Integer ver) throws ConfirmModSchemaException {
+        if (ver == schedVer()) {
+            return;
+        }
+        if (!fSupportedSchedulerVersions.contains(ver)) {
+            throw new RuntimeException("Unsupported scheduler version");
+        }
+        modSchema(true);
+        SchedV2 v2Sched = new SchedV2(this);
+        if (ver == 1) {
+            v2Sched.moveToV1();
+        } else {
+            v2Sched.moveToV2();
+        }
+        try {
+            mConf.put("schedVer", ver);
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
+        setMod();
+        _loadScheduler();
     }
 
 
@@ -963,7 +1016,7 @@ public class Collection {
                 // note point to invalid model
                 continue;
             }
-            r.add(new Object[] { Utils.stripHTML(fields[mModels.sortIdx(model)]), Utils.fieldChecksum(fields[0]), o[0] });
+            r.add(new Object[] { Utils.stripHTMLMedia(fields[mModels.sortIdx(model)]), Utils.fieldChecksum(fields[0]), o[0] });
         }
         // apply, relying on calling code to bump usn+mod
         mDb.executeMany("UPDATE notes SET sfld=?, csum=? WHERE id=?", r);
@@ -1497,7 +1550,7 @@ public class Collection {
         ArrayList<String> problems = new ArrayList<>();
         long oldSize = file.length();
         int currentTask = 1;
-        int totalTasks = (mModels.all().size() * 4) + 18; // 4 things are in all-models loops, 18 things are one-offs
+        int totalTasks = (mModels.all().size() * 4) + 20; // 4 things are in all-models loops, 20 things are one-offs
         try {
             mDb.getDatabase().beginTransaction();
             try {
@@ -1616,17 +1669,32 @@ public class Collection {
                 // new cards can't have a due position > 32 bits
                 fixIntegrityProgress(progressCallback, currentTask++, totalTasks);
                 mDb.execute("UPDATE cards SET due = 1000000, mod = " + Utils.intNow() + ", usn = " + usn()
-                        + " WHERE due > 1000000 AND queue = 0");
+                        + " WHERE due > 1000000 AND type = 0");
                 // new card position
                 mConf.put("nextPos", mDb.queryScalar("SELECT max(due) + 1 FROM cards WHERE type = 0"));
-                // reviews should have a reasonable due
+                // reviews should have a reasonable due #
                 fixIntegrityProgress(progressCallback, currentTask++, totalTasks);
-                ids = mDb.queryColumn(Long.class, "SELECT id FROM cards WHERE queue = 2 AND due > 10000", 0);
+                ids = mDb.queryColumn(Long.class, "SELECT id FROM cards WHERE queue = 2 AND due > 100000", 0);
                 fixIntegrityProgress(progressCallback, currentTask++, totalTasks);
                 if (ids.size() > 0) {
                 	problems.add("Reviews had incorrect due date.");
-                    mDb.execute("UPDATE cards SET due = 0, mod = " + Utils.intNow() + ", usn = " + usn()
-                            + " WHERE id IN " + Utils.ids2str(Utils.arrayList2array(ids)));
+                    mDb.execute("UPDATE cards SET due = " + mSched.getToday() + ", ivl = 1, mod = " +  Utils.intNow() +
+                            ", usn = " + usn() + " WHERE id IN " + Utils.ids2str(Utils.arrayList2array(ids)));
+                }
+                // v2 sched had a bug that could create decimal intervals
+                fixIntegrityProgress(progressCallback, currentTask++, totalTasks);
+                SupportSQLiteStatement s = mDb.getDatabase().compileStatement(
+                        "update cards set ivl=round(ivl),due=round(due) where ivl!=round(ivl) or due!=round(due)");
+                int rowCount = s.executeUpdateDelete();
+                if (rowCount > 0) {
+                    problems.add("Fixed " + rowCount + " cards with v2 scheduler bug.");
+                }
+                fixIntegrityProgress(progressCallback, currentTask++, totalTasks);
+                s = mDb.getDatabase().compileStatement(
+                        "update revlog set ivl=round(ivl),lastIvl=round(lastIvl) where ivl!=round(ivl) or lastIvl!=round(lastIvl)");
+                rowCount = s.executeUpdateDelete();
+                if (rowCount > 0) {
+                    problems.add("Fixed " + rowCount + " review history entries with v2 scheduler bug.");
                 }
                 mDb.getDatabase().setTransactionSuccessful();
                 // DB must have indices. Older versions of AnkiDroid didn't create them for new collections.
@@ -1681,20 +1749,19 @@ public class Collection {
      */
 
     /**
-     * Track database corruption problems - AcraLimiter should quench it if it's a torrent
-     * but we will take care to limit possible data usage by limiting count we send regardless
+     * Track database corruption problems and post analytics events for tracking
      *
-     * @param integrityCheckProblems list of problems, the first 10 will be logged and sent via ACRA
+     * @param integrityCheckProblems list of problems, the first 10 will be used
      */
-    private void logProblems(ArrayList integrityCheckProblems) {
+    private void logProblems(ArrayList<String> integrityCheckProblems) {
 
         if (integrityCheckProblems.size() > 0) {
             StringBuffer additionalInfo = new StringBuffer();
             for (int i = 0; ((i < 10) && (integrityCheckProblems.size() > i)); i++) {
                 additionalInfo.append(integrityCheckProblems.get(i)).append("\n");
+                // log analytics event so we can see trends if user allows it
+                UsageAnalytics.sendAnalyticsEvent("DatabaseCorruption", integrityCheckProblems.get(i));
             }
-            AnkiDroidApp.sendExceptionReport(
-                    new Exception("Problem list (limited to first 10)"), "Collection.fixIntegrity()", additionalInfo.toString());
             Timber.i("fixIntegrity() Problem list (limited to first 10):\n%s", additionalInfo);
         } else {
             Timber.i("fixIntegrity() no problems found");

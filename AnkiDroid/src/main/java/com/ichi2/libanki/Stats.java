@@ -801,16 +801,20 @@ public class Stats {
         if (lim.length() > 0) {
             lim = " and " + lim;
         }
-
-        Calendar sd = GregorianCalendar.getInstance();
-        sd.setTimeInMillis(mCol.getCrt() * 1000);
-
+        int rolloverHour;
+        if (mCol.schedVer() == 1) {
+            Calendar sd = GregorianCalendar.getInstance();
+            sd.setTimeInMillis(mCol.getCrt() * 1000);
+            rolloverHour = sd.get(Calendar.HOUR_OF_DAY);
+        } else {
+            rolloverHour = mCol.getConf().optInt("rollover", 4);
+        }
         int pd = _periodDays();
         if (pd > 0) {
             lim += " and id > " + ((mCol.getSched().getDayCutoff() - (SECONDS_PER_DAY * pd)) * 1000);
         }
         long cutoff = mCol.getSched().getDayCutoff();
-        long cut = cutoff - sd.get(Calendar.HOUR_OF_DAY) * 3600;
+        long cut = cutoff - rolloverHour * 3600;
 
         ArrayList<double[]> list = new ArrayList<>();
         Cursor cur = null;
@@ -821,7 +825,7 @@ public class Stats {
                 "count() " +
                 "from revlog where type in (0,1,2) " + lim +" " +
                 "group by hour having count() > 30 order by hour";
-        Timber.d(sd.get(Calendar.HOUR_OF_DAY) + " : " +cutoff + " breakdown query: %s", query);
+        Timber.d(rolloverHour + " : " +cutoff + " breakdown query: %s", query);
         try {
             cur = mCol.getDb()
                     .getDatabase()
@@ -1081,13 +1085,19 @@ public class Stats {
             lim = "";
         }
 
+        String ease4repl;
+        if (mCol.schedVer() == 1) {
+            ease4repl = "3";
+        } else {
+            ease4repl = "ease";
+        }
         ArrayList<double[]> list = new ArrayList<>();
         Cursor cur = null;
         String query = "select (case " +
                 "                when type in (0,2) then 0 " +
                 "        when lastIvl < 21 then 1 " +
                 "        else 2 end) as thetype, " +
-                "        (case when type in (0,2) and ease = 4 then 3 else ease end), count() from revlog " + lim + " " +
+                "        (case when type in (0,2) and ease = 4 then " + ease4repl +" else ease end), count() from revlog " + lim + " " +
                 "        group by thetype, ease " +
                 "        order by thetype, ease";
         Timber.d("AnswerButtons query: %s", query);
