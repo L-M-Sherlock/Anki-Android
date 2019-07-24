@@ -121,6 +121,11 @@
                     android:pathPattern=".*\\.apkg"
                     android:scheme="file" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="file" />
+            </intent-filter>
             <!-- MIME type matcher for .apkg files coming from providers like gmail which hide the file extension -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
