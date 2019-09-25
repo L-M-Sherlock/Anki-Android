@@ -86,6 +86,7 @@ import com.ichi2.libanki.Note;
 import com.ichi2.libanki.Sched;
 import com.ichi2.libanki.Sound;
 import com.ichi2.libanki.Utils;
+import com.ichi2.libanki.template.Template;
 import com.ichi2.themes.HtmlColors;
 import com.ichi2.themes.Themes;
 import com.ichi2.utils.DiffEngine;
@@ -1194,6 +1195,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                 .negativeText(res.getString(R.string.dialog_cancel))
                 .onPositive((dialog, which) -> {
                     Timber.i("AbstractFlashcardViewer:: OK button pressed to delete note %d", mCurrentCard.getNid());
+                    mSoundPlayer.stopSounds();
                     dismiss(Collection.DismissType.DELETE_NOTE);
                 })
                 .build().show();
@@ -2127,7 +2129,10 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         content = content.replace("font-weight:600;", "font-weight:700;");
 
         // CSS class for card-specific styling
-        String cardClass = "mathjax-hasnt-rendered-yet card card" + (mCurrentCard.getOrd() + 1);
+        String cardClass = "card card" + (mCurrentCard.getOrd() + 1);
+        if (Template.textContainsMathjax(content)) {
+            cardClass += " mathjax-needs-to-render";
+        }
 
         if (mPrefCenterVertically) {
             cardClass += " vertically_centered";
