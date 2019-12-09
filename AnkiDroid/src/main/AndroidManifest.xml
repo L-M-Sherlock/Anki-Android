@@ -23,7 +23,7 @@
           package="com.ichi2.anki"
           android:installLocation="auto"
           android:versionCode="20902204"
-          android:versionName="2.9.2beta4">
+          android:versionName="2.9.2beta4+">
 
     <!--
         The version number is of the form:
@@ -103,22 +103,22 @@
                 <data
                     android:host="*"
                     android:mimeType="*/*"
-                    android:pathPattern=".*\\.apkg"
+                    android:pathPattern=".*apkg"
                     android:scheme="http" />
                 <data
                     android:host="*"
                     android:mimeType="*/*"
-                    android:pathPattern=".*\\.apkg"
+                    android:pathPattern=".*apkg"
                     android:scheme="https" />
                 <data
                     android:host="*"
                     android:mimeType="*/*"
-                    android:pathPattern=".*\\.apkg"
+                    android:pathPattern=".*apkg"
                     android:scheme="content" />
                 <data
                     android:host="*"
                     android:mimeType="*/*"
-                    android:pathPattern=".*\\.apkg"
+                    android:pathPattern=".*apkg"
                     android:scheme="file" />
             </intent-filter>
             <intent-filter>
